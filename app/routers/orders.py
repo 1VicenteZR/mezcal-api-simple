@@ -14,6 +14,8 @@ def get_cart(db: Session = Depends(get_db), current_user: models.User = Depends(
 
 @cart_router.post("/", response_model=schemas.CartItemOut)
 def add_to_cart(item: schemas.CartItemAdd, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    if current_user.role == "admin":
+        raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede usar el carrito")
     product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -39,6 +41,8 @@ def add_to_cart(item: schemas.CartItemAdd, db: Session = Depends(get_db), curren
 
 @cart_router.delete("/{item_id}")
 def remove_from_cart(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    if current_user.role == "admin":
+        raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede usar el carrito")
     item = db.query(models.CartItem).filter(
         models.CartItem.id == item_id,
         models.CartItem.user_id == current_user.id
@@ -52,7 +56,7 @@ def remove_from_cart(item_id: int, db: Session = Depends(get_db), current_user: 
 @orders_router.post("/checkout", response_model=schemas.OrderOut)
 def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     if current_user.role == "admin":
-        raise HTTPException(status_code=403, detail="El admin no puede realizar compras")
+        raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede realizar compras")
 
     cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == current_user.id).all()
     if not cart_items:

@@ -45,6 +45,16 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
 def require_role(*roles):
     def checker(user: models.User = Depends(get_current_user)):
         if user.role not in roles:
-            raise HTTPException(status_code=403, detail=f"Requiere rol: {roles}")
+            raise HTTPException(status_code=403, detail="Acceso no permitido: no tienes el rol requerido para esta acción")
         return user
     return checker
+
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return pwd_context.verify(plain, hashed)
