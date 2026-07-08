@@ -97,3 +97,12 @@ class OrderOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+class ReviewCreateSimple(BaseModel):
+    product_id: int
+    rating: int
+    comment: Optional[str] = None
+
+class CartItemAdd(BaseModel):
+    product_id: int
+    quantity: int = 1

@@ -58,14 +58,11 @@ def list_reviews(product_id: int, db: Session = Depends(get_db)):
     return db.query(models.Review).filter(models.Review.product_id == product_id).all()
 
 @reviews_router.post("/", response_model=schemas.ReviewOut)
-def create_review(review: schemas.ReviewCreate, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == review.user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado, debes estar registrado para reseñar")
+def create_review(review: schemas.ReviewCreateSimple, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     product = db.query(models.Product).filter(models.Product.id == review.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
-    new_review = models.Review(**review.dict())
+    new_review = models.Review(product_id=review.product_id, user_id=current_user.id, rating=review.rating, comment=review.comment)
     db.add(new_review)
     db.commit()
     db.refresh(new_review)

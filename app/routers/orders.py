@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 
-from .. import models, schemas
+from .. import models, schemas, permissions
 from ..database import get_db
 
 cart_router = APIRouter(prefix="/cart", tags=["Cart"])
 orders_router = APIRouter(prefix="/orders", tags=["Orders"])
 
 @cart_router.get("/", response_model=List[schemas.CartItemOut])
-def get_cart(user_id: int = Query(...), db: Session = Depends(get_db)):
-    return db.query(models.CartItem).filter(models.CartItem.user_id == user_id).all()
+def get_cart(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    return db.query(models.CartItem).filter(models.CartItem.user_id == current_user.id).all()
 
 @cart_router.post("/", response_model=schemas.CartItemOut)
-def add_to_cart(item: schemas.CartItemCreate, db: Session = Depends(get_db)):
+def add_to_cart(item: schemas.CartItemAdd, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Producto no encontrado")
@@ -21,7 +21,7 @@ def add_to_cart(item: schemas.CartItemCreate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Stock insuficiente")
 
     existing = db.query(models.CartItem).filter(
-        models.CartItem.user_id == item.user_id,
+        models.CartItem.user_id == current_user.id,
         models.CartItem.product_id == item.product_id
     ).first()
 
@@ -31,17 +31,17 @@ def add_to_cart(item: schemas.CartItemCreate, db: Session = Depends(get_db)):
         db.refresh(existing)
         return existing
 
-    new_item = models.CartItem(user_id=item.user_id, product_id=item.product_id, quantity=item.quantity)
+    new_item = models.CartItem(user_id=current_user.id, product_id=item.product_id, quantity=item.quantity)
     db.add(new_item)
     db.commit()
     db.refresh(new_item)
     return new_item
 
 @cart_router.delete("/{item_id}")
-def remove_from_cart(item_id: int, user_id: int = Query(...), db: Session = Depends(get_db)):
+def remove_from_cart(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     item = db.query(models.CartItem).filter(
         models.CartItem.id == item_id,
-        models.CartItem.user_id == user_id
+        models.CartItem.user_id == current_user.id
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item no encontrado en tu carrito")
@@ -50,8 +50,11 @@ def remove_from_cart(item_id: int, user_id: int = Query(...), db: Session = Depe
     return {"detail": "Item eliminado del carrito"}
 
 @orders_router.post("/checkout", response_model=schemas.OrderOut)
-def checkout(user_id: int = Query(...), db: Session = Depends(get_db)):
-    cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == user_id).all()
+def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    if current_user.role == "admin":
+        raise HTTPException(status_code=403, detail="El admin no puede realizar compras")
+
+    cart_items = db.query(models.CartItem).filter(models.CartItem.user_id == current_user.id).all()
     if not cart_items:
         raise HTTPException(status_code=400, detail="Carrito vacío")
 
@@ -69,7 +72,7 @@ def checkout(user_id: int = Query(...), db: Session = Depends(get_db)):
         total += subtotal
         order_items_data.append((product, cart_item.quantity, product.price))
 
-    new_order = models.Order(user_id=user_id, total=total, status="pendiente")
+    new_order = models.Order(user_id=current_user.id, total=total, status="pendiente")
     db.add(new_order)
     db.commit()
     db.refresh(new_order)
@@ -95,8 +98,8 @@ def checkout(user_id: int = Query(...), db: Session = Depends(get_db)):
     return new_order
 
 @orders_router.get("/", response_model=List[schemas.OrderOut])
-def list_my_orders(user_id: int = Query(...), db: Session = Depends(get_db)):
-    orders = db.query(models.Order).filter(models.Order.user_id == user_id).all()
+def list_my_orders(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    orders = db.query(models.Order).filter(models.Order.user_id == current_user.id).all()
     for order in orders:
         order.items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
     return orders

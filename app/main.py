@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 
 from .database import engine, Base
-from .routers import users, products, orders
+from .routers import users, products, orders, auth
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Mezcal API Simple - Users CRUD")
 
+app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(products.router)
 app.include_router(products.reviews_router)
