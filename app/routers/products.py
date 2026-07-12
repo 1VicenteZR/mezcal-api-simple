@@ -67,3 +67,30 @@ def create_review(review: schemas.ReviewCreateSimple, db: Session = Depends(get_
     db.commit()
     db.refresh(new_review)
     return new_review
+
+# ---- Subida de imágenes (solo admin) ----
+
+import os
+import uuid
+from fastapi import UploadFile, File
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "..", "uploads", "products")
+UPLOAD_DIR = os.path.abspath(UPLOAD_DIR)
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+@router.post("/upload-image")
+def upload_product_image(file: UploadFile = File(...), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Formato no permitido. Usa jpg, jpeg, png o webp")
+
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(file.file.read())
+
+    image_url = f"/uploads/products/{filename}"
+    return {"imagen_url": image_url}

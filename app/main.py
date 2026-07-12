@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+import os as _os
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -11,6 +13,9 @@ load_dotenv()
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Mezcal API Simple - Users CRUD")
+
+_uploads_dir = _os.path.join(_os.path.dirname(__file__), "..", "uploads")
+app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
 
 CORS_ENABLED = os.getenv("CORS_ENABLED", "false").lower() == "true"
 
