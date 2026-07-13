@@ -1,8 +1,7 @@
 import json
 import os
 
-from google import genai
-from google.genai import errors, types
+from groq import Groq
 
 _client = None
 
@@ -16,18 +15,13 @@ SYSTEM_PROMPT = (
 )
 
 
-def _get_client() -> genai.Client:
+def _get_client() -> Groq:
     global _client
     if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("GROQ_API_KEY")
         if not api_key:
-            raise RuntimeError("GEMINI_API_KEY no configurada")
-        # vertexai=False fuerza el modo "Gemini Developer API" (autenticacion
-        # simple por api_key). Sin esto, si el entorno tiene variables de
-        # Google Cloud (GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS,
-        # etc.), el SDK puede autodetectar modo Vertex AI y exigir OAuth2
-        # en vez de usar la api_key, causando 401 UNAUTHENTICATED.
-        _client = genai.Client(api_key=api_key, vertexai=False)
+            raise RuntimeError("GROQ_API_KEY no configurada")
+        _client = Groq(api_key=api_key)
     return _client
 
 
@@ -54,17 +48,22 @@ def rank_products_by_query(query: str, products: list[dict]) -> list[int]:
     ]
 
     try:
-        response = _get_client().models.generate_content(
-            model="gemini-2.0-flash",
-            contents=f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
-            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        completion = _get_client().chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
+                },
+            ],
         )
-    except errors.APIError as exc:
-        # Errores de Gemini (401/404/503/etc.) se traducen a RuntimeError
-        # para que el router los responda como 503 en vez de un 500 opaco.
+    except Exception as exc:
+        # Cualquier fallo de la API de Groq (auth, cuota, disponibilidad) se
+        # traduce a RuntimeError, que el router responde como 503 con detalle.
         raise RuntimeError(f"Servicio de IA no disponible: {exc}") from exc
 
-    text = _strip_code_fence(response.text or "")
+    text = _strip_code_fence(completion.choices[0].message.content or "")
     try:
         ids = json.loads(text)
     except (json.JSONDecodeError, ValueError):
