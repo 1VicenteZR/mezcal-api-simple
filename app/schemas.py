@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
-from .models import RoleEnum
+from .models import RoleEnum, OrderStatusEnum
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -99,6 +99,29 @@ class OrderOut(BaseModel):
 
     class Config:
         orm_mode = True
+
+class OrderItemAdminOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    quantity: int
+    unit_price: int
+
+class OrderCustomerOut(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: Optional[str]
+
+class OrderAdminOut(BaseModel):
+    id: int
+    total: int
+    status: str
+    created_at: datetime
+    items: list[OrderItemAdminOut] = []
+    customer: Optional[OrderCustomerOut] = None
+
+class OrderStatusUpdate(BaseModel):
+    status: OrderStatusEnum
 
 class ReviewCreateSimple(BaseModel):
     product_id: int

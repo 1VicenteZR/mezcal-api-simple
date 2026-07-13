@@ -107,3 +107,42 @@ def list_my_orders(db: Session = Depends(get_db), current_user: models.User = De
     for order in orders:
         order.items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
     return orders
+
+# ---- Vistas de administrador (todas las ventas) ----
+
+def _serialize_order_admin(db: Session, order: models.Order) -> dict:
+    user = db.query(models.User).filter(models.User.id == order.user_id).first()
+    items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
+    items_out = []
+    for item in items:
+        product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        items_out.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "product_name": product.name if product else "Producto eliminado",
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+        })
+    return {
+        "id": order.id,
+        "total": order.total,
+        "status": order.status,
+        "created_at": order.created_at,
+        "items": items_out,
+        "customer": {"id": user.id, "email": user.email, "full_name": user.full_name} if user else None,
+    }
+
+@orders_router.get("/all", response_model=List[schemas.OrderAdminOut])
+def list_all_orders(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+    orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
+    return [_serialize_order_admin(db, order) for order in orders]
+
+@orders_router.put("/{order_id}/status", response_model=schemas.OrderAdminOut)
+def update_order_status(order_id: int, update: schemas.OrderStatusUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+    order = db.query(models.Order).filter(models.Order.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    order.status = update.status
+    db.commit()
+    db.refresh(order)
+    return _serialize_order_admin(db, order)
