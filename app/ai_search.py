@@ -54,7 +54,7 @@ def rank_products_by_query(query: str, products: list[dict]) -> list[int]:
     ]
 
     response = _get_client().models.generate_content(
-        model="gemini-2.5-flash",
+        model="gemini-flash-latest",
         contents=f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
         config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
     )
