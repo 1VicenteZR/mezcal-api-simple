@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from .. import models, schemas, permissions
+from .. import models, schemas, permissions, ai_search
 from ..database import get_db
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -13,6 +13,34 @@ reviews_router = APIRouter(prefix="/reviews", tags=["Reviews"])
 @router.get("/", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db)):
     return db.query(models.Product).all()
+
+# Búsqueda inteligente (IA): debe ir antes de "/{product_id}" para que
+# "/products/search" no sea interpretado como un product_id.
+@router.get("/search", response_model=List[schemas.ProductOut])
+def search_products_ai(q: str = Query(..., min_length=1), db: Session = Depends(get_db)):
+    products = db.query(models.Product).all()
+    if not products:
+        return []
+
+    products_dict = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "description": p.description,
+            "tipo_mezcal": p.tipo_mezcal,
+            "region": p.region,
+            "abv": p.abv,
+        }
+        for p in products
+    ]
+
+    try:
+        ranked_ids = ai_search.rank_products_by_query(q, products_dict)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    by_id = {p.id: p for p in products}
+    return [by_id[i] for i in ranked_ids if i in by_id]
 
 @router.get("/{product_id}", response_model=schemas.ProductOut)
 def get_product(product_id: int, db: Session = Depends(get_db)):
