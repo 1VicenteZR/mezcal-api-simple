@@ -22,7 +22,12 @@ def _get_client() -> genai.Client:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY no configurada")
-        _client = genai.Client(api_key=api_key)
+        # vertexai=False fuerza el modo "Gemini Developer API" (autenticacion
+        # simple por api_key). Sin esto, si el entorno tiene variables de
+        # Google Cloud (GOOGLE_CLOUD_PROJECT, GOOGLE_APPLICATION_CREDENTIALS,
+        # etc.), el SDK puede autodetectar modo Vertex AI y exigir OAuth2
+        # en vez de usar la api_key, causando 401 UNAUTHENTICATED.
+        _client = genai.Client(api_key=api_key, vertexai=False)
     return _client
 
 
