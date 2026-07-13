@@ -2,7 +2,7 @@ import json
 import os
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 _client = None
 
@@ -53,11 +53,16 @@ def rank_products_by_query(query: str, products: list[dict]) -> list[int]:
         for p in products
     ]
 
-    response = _get_client().models.generate_content(
-        model="gemini-flash-latest",
-        contents=f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
-        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
-    )
+    try:
+        response = _get_client().models.generate_content(
+            model="gemini-flash-latest",
+            contents=f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
+            config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
+        )
+    except errors.APIError as exc:
+        # Errores de Gemini (401/404/503/etc.) se traducen a RuntimeError
+        # para que el router los responda como 503 en vez de un 500 opaco.
+        raise RuntimeError(f"Servicio de IA no disponible: {exc}") from exc
 
     text = _strip_code_fence(response.text or "")
     try:
