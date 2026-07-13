@@ -28,6 +28,7 @@ class Product(Base):
     tipo_mezcal = Column(String, nullable=True)
     region = Column(String, nullable=True)
     abv = Column(Integer, nullable=True)
+    imagen_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

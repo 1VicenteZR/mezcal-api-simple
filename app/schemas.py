@@ -33,6 +33,7 @@ class ProductCreate(BaseModel):
     tipo_mezcal: Optional[str] = None
     region: Optional[str] = None
     abv: Optional[int] = None
+    imagen_url: Optional[str] = None
 
 class ProductOut(BaseModel):
     id: int
@@ -43,6 +44,7 @@ class ProductOut(BaseModel):
     tipo_mezcal: Optional[str]
     region: Optional[str]
     abv: Optional[int]
+    imagen_url: Optional[str]
     created_at: datetime
 
     class Config:
