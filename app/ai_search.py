@@ -1,7 +1,8 @@
 import json
 import os
 
-from anthropic import Anthropic
+from google import genai
+from google.genai import types
 
 _client = None
 
@@ -11,18 +12,27 @@ SYSTEM_PROMPT = (
     "Devuelve UNICAMENTE un array JSON de ids (numeros enteros) de los productos "
     "relevantes para la consulta, ordenados del mas al menos relevante. "
     "Si ningun producto es relevante, devuelve un array vacio []. "
-    "No incluyas texto fuera del array JSON."
+    "No incluyas texto fuera del array JSON, ni bloques de codigo markdown."
 )
 
 
-def _get_client() -> Anthropic:
+def _get_client() -> genai.Client:
     global _client
     if _client is None:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
-            raise RuntimeError("ANTHROPIC_API_KEY no configurada")
-        _client = Anthropic(api_key=api_key)
+            raise RuntimeError("GEMINI_API_KEY no configurada")
+        _client = genai.Client(api_key=api_key)
     return _client
+
+
+def _strip_code_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+    return text.strip()
 
 
 def rank_products_by_query(query: str, products: list[dict]) -> list[int]:
@@ -38,19 +48,13 @@ def rank_products_by_query(query: str, products: list[dict]) -> list[int]:
         for p in products
     ]
 
-    message = _get_client().messages.create(
-        model="claude-sonnet-5",
-        max_tokens=1024,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {
-                "role": "user",
-                "content": f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
-            }
-        ],
+    response = _get_client().models.generate_content(
+        model="gemini-2.5-flash",
+        contents=f"Consulta: {query}\n\nCatalogo:\n{json.dumps(catalog, ensure_ascii=False)}",
+        config=types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT),
     )
 
-    text = "".join(block.text for block in message.content if block.type == "text").strip()
+    text = _strip_code_fence(response.text or "")
     try:
         ids = json.loads(text)
     except (json.JSONDecodeError, ValueError):
