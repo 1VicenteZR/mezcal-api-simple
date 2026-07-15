@@ -14,6 +14,7 @@ class UserOut(BaseModel):
     email: EmailStr
     full_name: Optional[str]
     role: RoleEnum
+    is_active: bool
     created_at: datetime
 
     class Config:
@@ -24,6 +25,27 @@ class UserUpdate(BaseModel):
     password: Optional[str] = None
     full_name: Optional[str] = None
     role: Optional[RoleEnum] = None
+    is_active: Optional[bool] = None
+
+class CategoryCreate(BaseModel):
+    name: str
+
+class CategoryOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
+class BrandCreate(BaseModel):
+    name: str
+
+class BrandOut(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
 
 class ProductCreate(BaseModel):
     name: str
@@ -131,3 +153,24 @@ class ReviewCreateSimple(BaseModel):
 class CartItemAdd(BaseModel):
     product_id: int
     quantity: int = 1
+
+class TopSellingProductOut(BaseModel):
+    product_id: int
+    name: str
+    total_quantity: int
+
+class TopRatedProductOut(BaseModel):
+    product_id: int
+    name: str
+    avg_rating: float
+    review_count: int
+
+class ReviewAdminOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    user_id: int
+    user_email: Optional[str] = None
+    rating: int
+    comment: Optional[str]
+    created_at: datetime

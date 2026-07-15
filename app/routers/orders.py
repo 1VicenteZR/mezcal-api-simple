@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -107,6 +108,25 @@ def list_my_orders(db: Session = Depends(get_db), current_user: models.User = De
     for order in orders:
         order.items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
     return orders
+
+@orders_router.get("/stats/top-products", response_model=List[schemas.TopSellingProductOut])
+def top_selling_products(limit: int = 5, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+    rows = (
+        db.query(
+            models.OrderItem.product_id,
+            models.Product.name,
+            func.sum(models.OrderItem.quantity).label("total_quantity"),
+        )
+        .join(models.Product, models.Product.id == models.OrderItem.product_id)
+        .group_by(models.OrderItem.product_id, models.Product.name)
+        .order_by(func.sum(models.OrderItem.quantity).desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {"product_id": r.product_id, "name": r.name, "total_quantity": int(r.total_quantity)}
+        for r in rows
+    ]
 
 # ---- Vistas de administrador (todas las ventas) ----
 
