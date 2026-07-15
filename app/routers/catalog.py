@@ -27,6 +27,20 @@ def _make_crud(router: APIRouter, model, create_schema, out_schema, label: str):
         db.refresh(new_item)
         return new_item
 
+    @router.put("/{item_id}", response_model=out_schema)
+    def update_item(item_id: int, item: create_schema, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+        obj = db.query(model).filter(model.id == item_id).first()
+        if not obj:
+            raise HTTPException(status_code=404, detail=f"{label} no encontrada")
+        obj.name = item.name.strip()
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=f"Ya existe {label} con ese nombre")
+        db.refresh(obj)
+        return obj
+
     @router.delete("/{item_id}")
     def delete_item(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
         obj = db.query(model).filter(model.id == item_id).first()
