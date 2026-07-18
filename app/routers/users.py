@@ -23,6 +23,12 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 def list_users(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
     return db.query(models.User).all()
 
+# "/me": debe ir antes de "/{user_id}" para que no se interprete "me"
+# como un id (misma razon que "/products/search").
+@router.get("/me", response_model=schemas.UserOut)
+def get_me(current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    return current_user
+
 @router.get("/{user_id}", response_model=schemas.UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
     user = db.query(models.User).filter(models.User.id == user_id).first()
