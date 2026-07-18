@@ -9,9 +9,25 @@ from ..database import get_db
 cart_router = APIRouter(prefix="/cart", tags=["Cart"])
 orders_router = APIRouter(prefix="/orders", tags=["Orders"])
 
-@cart_router.get("/", response_model=List[schemas.CartItemOut])
+@cart_router.get("/", response_model=List[schemas.CartItemDetailOut])
 def get_cart(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
-    return db.query(models.CartItem).filter(models.CartItem.user_id == current_user.id).all()
+    items = db.query(models.CartItem).filter(models.CartItem.user_id == current_user.id).all()
+    result = []
+    for item in items:
+        product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        if not product:
+            continue
+        result.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "product_name": product.name,
+            "product_price": product.price,
+            "product_stock": product.stock,
+            "imagen_url": product.imagen_url,
+            "quantity": item.quantity,
+            "created_at": item.created_at,
+        })
+    return result
 
 @cart_router.post("/", response_model=schemas.CartItemOut)
 def add_to_cart(item: schemas.CartItemAdd, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
@@ -39,6 +55,37 @@ def add_to_cart(item: schemas.CartItemAdd, db: Session = Depends(get_db), curren
     db.commit()
     db.refresh(new_item)
     return new_item
+
+@cart_router.put("/{item_id}", response_model=schemas.CartItemDetailOut)
+def update_cart_item(item_id: int, update: schemas.CartItemUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    if current_user.role == "admin":
+        raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede usar el carrito")
+    item = db.query(models.CartItem).filter(
+        models.CartItem.id == item_id,
+        models.CartItem.user_id == current_user.id
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item no encontrado en tu carrito")
+    if update.quantity < 1:
+        raise HTTPException(status_code=400, detail="La cantidad debe ser al menos 1")
+    product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    if product.stock < update.quantity:
+        raise HTTPException(status_code=400, detail="Stock insuficiente")
+    item.quantity = update.quantity
+    db.commit()
+    db.refresh(item)
+    return {
+        "id": item.id,
+        "product_id": item.product_id,
+        "product_name": product.name,
+        "product_price": product.price,
+        "product_stock": product.stock,
+        "imagen_url": product.imagen_url,
+        "quantity": item.quantity,
+        "created_at": item.created_at,
+    }
 
 @cart_router.delete("/{item_id}")
 def remove_from_cart(item_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):

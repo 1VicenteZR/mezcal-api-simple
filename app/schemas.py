@@ -103,6 +103,19 @@ class CartItemOut(BaseModel):
     class Config:
         orm_mode = True
 
+class CartItemDetailOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    product_price: int
+    product_stock: int
+    imagen_url: Optional[str] = None
+    quantity: int
+    created_at: datetime
+
+class CartItemUpdate(BaseModel):
+    quantity: int
+
 class OrderItemOut(BaseModel):
     id: int
     product_id: int
