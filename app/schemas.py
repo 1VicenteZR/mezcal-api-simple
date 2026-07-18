@@ -135,6 +135,21 @@ class OrderOut(BaseModel):
     class Config:
         orm_mode = True
 
+class OrderItemMineOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    imagen_url: Optional[str] = None
+    quantity: int
+    unit_price: int
+
+class OrderMineOut(BaseModel):
+    id: int
+    total: int
+    status: str
+    created_at: datetime
+    items: list[OrderItemMineOut] = []
+
 class OrderItemAdminOut(BaseModel):
     id: int
     product_id: int

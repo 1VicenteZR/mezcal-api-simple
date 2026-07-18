@@ -101,7 +101,28 @@ def remove_from_cart(item_id: int, db: Session = Depends(get_db), current_user: 
     db.commit()
     return {"detail": "Item eliminado del carrito"}
 
-@orders_router.post("/checkout", response_model=schemas.OrderOut)
+def _serialize_order_mine(db: Session, order: models.Order) -> dict:
+    items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
+    items_out = []
+    for item in items:
+        product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        items_out.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "product_name": product.name if product else "Producto eliminado",
+            "imagen_url": product.imagen_url if product else None,
+            "quantity": item.quantity,
+            "unit_price": item.unit_price,
+        })
+    return {
+        "id": order.id,
+        "total": order.total,
+        "status": order.status,
+        "created_at": order.created_at,
+        "items": items_out,
+    }
+
+@orders_router.post("/checkout", response_model=schemas.OrderMineOut)
 def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede realizar compras")
@@ -145,15 +166,12 @@ def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(
     db.commit()
     db.refresh(new_order)
 
-    items = db.query(models.OrderItem).filter(models.OrderItem.order_id == new_order.id).all()
-    new_order.items = items
-    return new_order
+    return _serialize_order_mine(db, new_order)
 
-@orders_router.get("/", response_model=List[schemas.OrderOut])
+@orders_router.get("/", response_model=List[schemas.OrderMineOut])
 def list_my_orders(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
-    orders = db.query(models.Order).filter(models.Order.user_id == current_user.id).all()
-    for order in orders:
-        order.items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
+    orders = db.query(models.Order).filter(models.Order.user_id == current_user.id).order_by(models.Order.created_at.desc()).all()
+    return [_serialize_order_mine(db, order) for order in orders]
     return orders
 
 @orders_router.get("/stats/top-products", response_model=List[schemas.TopSellingProductOut])
