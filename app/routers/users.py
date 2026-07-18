@@ -29,6 +29,23 @@ def list_users(db: Session = Depends(get_db), current_user: models.User = Depend
 def get_me(current_user: models.User = Depends(permissions.get_current_user_simulado)):
     return current_user
 
+@router.put("/me", response_model=schemas.UserOut)
+def update_me(
+    update: schemas.UserSelfUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(permissions.get_current_user_simulado),
+):
+    data = update.dict(exclude_unset=True)
+    if "email" in data and data["email"] != current_user.email:
+        existing = db.query(models.User).filter(models.User.email == data["email"]).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Ya existe una cuenta registrada con ese email")
+    for key, value in data.items():
+        setattr(current_user, key, value)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
 @router.get("/{user_id}", response_model=schemas.UserOut)
 def get_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
     user = db.query(models.User).filter(models.User.id == user_id).first()

@@ -27,6 +27,10 @@ class UserUpdate(BaseModel):
     role: Optional[RoleEnum] = None
     is_active: Optional[bool] = None
 
+class UserSelfUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
 class CategoryCreate(BaseModel):
     name: str
 
