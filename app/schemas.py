@@ -121,6 +121,21 @@ class CartItemDetailOut(BaseModel):
 class CartItemUpdate(BaseModel):
     quantity: int
 
+class FavoriteCreate(BaseModel):
+    product_id: int
+
+class FavoriteProductOut(BaseModel):
+    id: int
+    product_id: int
+    product_name: str
+    product_price: int
+    product_stock: int
+    imagen_url: Optional[str] = None
+    tipo_mezcal: Optional[str] = None
+    description: Optional[str] = None
+    abv: Optional[int] = None
+    created_at: datetime
+
 class OrderItemOut(BaseModel):
     id: int
     product_id: int

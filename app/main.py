@@ -6,7 +6,7 @@ import os
 from dotenv import load_dotenv
 
 from .database import engine, Base
-from .routers import users, products, orders, auth, catalog
+from .routers import users, products, orders, auth, catalog, favorites
 
 load_dotenv()
 
@@ -36,6 +36,7 @@ app.include_router(orders.cart_router)
 app.include_router(orders.orders_router)
 app.include_router(catalog.categories_router)
 app.include_router(catalog.brands_router)
+app.include_router(favorites.router)
 
 @app.get("/")
 def root():
