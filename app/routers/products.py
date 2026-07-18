@@ -9,6 +9,15 @@ from ..database import get_db
 router = APIRouter(prefix="/products", tags=["Products"])
 reviews_router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
+def _display_name(full_name: str | None) -> str:
+    """Nombre + inicial de apellido (ej. 'Juan P.') para no exponer el nombre completo."""
+    if not full_name or not full_name.strip():
+        return "Usuario"
+    parts = full_name.strip().split()
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0].upper()}."
+
 # Público (invitado): ver productos, sin restricción
 
 @router.get("/", response_model=List[schemas.ProductOut])
@@ -141,7 +150,20 @@ def delete_review(review_id: int, db: Session = Depends(get_db), current_user: m
 
 @reviews_router.get("/{product_id}", response_model=List[schemas.ReviewOut])
 def list_reviews(product_id: int, db: Session = Depends(get_db)):
-    return db.query(models.Review).filter(models.Review.product_id == product_id).all()
+    reviews = db.query(models.Review).filter(models.Review.product_id == product_id).all()
+    result = []
+    for r in reviews:
+        user = db.query(models.User).filter(models.User.id == r.user_id).first()
+        result.append({
+            "id": r.id,
+            "product_id": r.product_id,
+            "user_id": r.user_id,
+            "user_name": _display_name(user.full_name if user else None),
+            "rating": r.rating,
+            "comment": r.comment,
+            "created_at": r.created_at,
+        })
+    return result
 
 @reviews_router.post("/", response_model=schemas.ReviewOut)
 def create_review(review: schemas.ReviewCreateSimple, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
@@ -152,7 +174,15 @@ def create_review(review: schemas.ReviewCreateSimple, db: Session = Depends(get_
     db.add(new_review)
     db.commit()
     db.refresh(new_review)
-    return new_review
+    return {
+        "id": new_review.id,
+        "product_id": new_review.product_id,
+        "user_id": new_review.user_id,
+        "user_name": _display_name(current_user.full_name),
+        "rating": new_review.rating,
+        "comment": new_review.comment,
+        "created_at": new_review.created_at,
+    }
 
 # ---- Subida de imágenes (solo admin) ----
 

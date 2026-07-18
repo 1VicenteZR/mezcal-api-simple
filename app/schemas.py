@@ -82,6 +82,7 @@ class ReviewOut(BaseModel):
     id: int
     product_id: int
     user_id: int
+    user_name: Optional[str] = None
     rating: int
     comment: Optional[str]
     created_at: datetime
