@@ -22,7 +22,16 @@ def _display_name(full_name: str | None) -> str:
 
 @router.get("/", response_model=List[schemas.ProductOut])
 def list_products(db: Session = Depends(get_db)):
-    return db.query(models.Product).all()
+    products = db.query(models.Product).all()
+    ratings = dict(
+        db.query(models.Review.product_id, func.avg(models.Review.rating))
+        .group_by(models.Review.product_id)
+        .all()
+    )
+    for p in products:
+        avg = ratings.get(p.id)
+        p.avg_rating = round(float(avg), 2) if avg is not None else None
+    return products
 
 # Búsqueda inteligente (IA): debe ir antes de "/{product_id}" para que
 # "/products/search" no sea interpretado como un product_id.
@@ -140,13 +149,38 @@ def list_all_reviews(db: Session = Depends(get_db), current_user: models.User = 
     return result
 
 @reviews_router.delete("/{review_id}")
-def delete_review(review_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
+def delete_review(review_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     review = db.query(models.Review).filter(models.Review.id == review_id).first()
     if not review:
         raise HTTPException(status_code=404, detail="Reseña no encontrada")
+    if current_user.role != "admin" and review.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Acceso no permitido: no puedes eliminar la reseña de otro usuario")
     db.delete(review)
     db.commit()
     return {"detail": "Reseña eliminada"}
+
+@reviews_router.put("/{review_id}", response_model=schemas.ReviewOut)
+def update_review(review_id: int, update: schemas.ReviewUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    review = db.query(models.Review).filter(models.Review.id == review_id).first()
+    if not review:
+        raise HTTPException(status_code=404, detail="Reseña no encontrada")
+    if review.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Acceso no permitido: no puedes editar la reseña de otro usuario")
+    data = update.dict(exclude_unset=True)
+    for key, value in data.items():
+        setattr(review, key, value)
+    db.commit()
+    db.refresh(review)
+    user = db.query(models.User).filter(models.User.id == review.user_id).first()
+    return {
+        "id": review.id,
+        "product_id": review.product_id,
+        "user_id": review.user_id,
+        "user_name": _display_name(user.full_name if user else None),
+        "rating": review.rating,
+        "comment": review.comment,
+        "created_at": review.created_at,
+    }
 
 @reviews_router.get("/{product_id}", response_model=List[schemas.ReviewOut])
 def list_reviews(product_id: int, db: Session = Depends(get_db)):

@@ -72,6 +72,7 @@ class ProductOut(BaseModel):
     abv: Optional[int]
     imagen_url: Optional[str]
     created_at: datetime
+    avg_rating: Optional[float] = None
 
     class Config:
         orm_mode = True
@@ -196,6 +197,10 @@ class OrderStatusUpdate(BaseModel):
 class ReviewCreateSimple(BaseModel):
     product_id: int
     rating: int
+    comment: Optional[str] = None
+
+class ReviewUpdate(BaseModel):
+    rating: Optional[int] = None
     comment: Optional[str] = None
 
 class CartItemAdd(BaseModel):
