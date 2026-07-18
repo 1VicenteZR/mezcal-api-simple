@@ -172,7 +172,29 @@ def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(
 def list_my_orders(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     orders = db.query(models.Order).filter(models.Order.user_id == current_user.id).order_by(models.Order.created_at.desc()).all()
     return [_serialize_order_mine(db, order) for order in orders]
-    return orders
+
+@orders_router.put("/{order_id}/cancel", response_model=schemas.OrderMineOut)
+def cancel_my_order(order_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    order = db.query(models.Order).filter(
+        models.Order.id == order_id,
+        models.Order.user_id == current_user.id
+    ).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Pedido no encontrado")
+    if order.status not in ("pendiente", "pagado"):
+        raise HTTPException(status_code=400, detail="Este pedido ya no se puede cancelar")
+
+    # Devolver el stock reservado al cancelar
+    items = db.query(models.OrderItem).filter(models.OrderItem.order_id == order.id).all()
+    for item in items:
+        product = db.query(models.Product).filter(models.Product.id == item.product_id).first()
+        if product:
+            product.stock += item.quantity
+
+    order.status = "cancelado"
+    db.commit()
+    db.refresh(order)
+    return _serialize_order_mine(db, order)
 
 @orders_router.get("/stats/top-products", response_model=List[schemas.TopSellingProductOut])
 def top_selling_products(limit: int = 5, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
