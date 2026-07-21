@@ -122,6 +122,23 @@ def _serialize_order_mine(db: Session, order: models.Order) -> dict:
         "items": items_out,
     }
 
+def _create_order(db: Session, user_id: int, items: list, payment_method: str) -> models.Order:
+    """items: lista de tuplas (product, quantity) ya validadas contra el stock."""
+    total = sum(product.price * quantity for product, quantity in items)
+    initial_status = "pagado" if payment_method == "tarjeta" else "pendiente"
+    new_order = models.Order(user_id=user_id, total=total, status=initial_status)
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    for product, quantity in items:
+        db.add(models.OrderItem(order_id=new_order.id, product_id=product.id, quantity=quantity, unit_price=product.price))
+        product.stock -= quantity
+
+    db.commit()
+    db.refresh(new_order)
+    return new_order
+
 @orders_router.post("/checkout", response_model=schemas.OrderMineOut)
 def checkout(payment_method: str = "efectivo", db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     if current_user.role == "admin":
@@ -131,42 +148,38 @@ def checkout(payment_method: str = "efectivo", db: Session = Depends(get_db), cu
     if not cart_items:
         raise HTTPException(status_code=400, detail="Carrito vacío")
 
-    total = 0
-    order_items_data = []
-
+    items = []
     for cart_item in cart_items:
         product = db.query(models.Product).filter(models.Product.id == cart_item.product_id).first()
         if not product:
             raise HTTPException(status_code=404, detail=f"Producto {cart_item.product_id} ya no existe")
         if product.stock < cart_item.quantity:
             raise HTTPException(status_code=400, detail=f"Stock insuficiente para {product.name}")
+        items.append((product, cart_item.quantity))
 
-        subtotal = product.price * cart_item.quantity
-        total += subtotal
-        order_items_data.append((product, cart_item.quantity, product.price))
-
-    initial_status = "pagado" if payment_method == "tarjeta" else "pendiente"
-    new_order = models.Order(user_id=current_user.id, total=total, status=initial_status)
-    db.add(new_order)
-    db.commit()
-    db.refresh(new_order)
-
-    for product, quantity, unit_price in order_items_data:
-        order_item = models.OrderItem(
-            order_id=new_order.id,
-            product_id=product.id,
-            quantity=quantity,
-            unit_price=unit_price
-        )
-        db.add(order_item)
-        product.stock -= quantity
+    new_order = _create_order(db, current_user.id, items, payment_method)
 
     for cart_item in cart_items:
         db.delete(cart_item)
-
     db.commit()
-    db.refresh(new_order)
 
+    return _serialize_order_mine(db, new_order)
+
+@orders_router.post("/checkout-now", response_model=schemas.OrderMineOut)
+def checkout_now(data: schemas.DirectCheckoutRequest, payment_method: str = "efectivo", db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+    """Compra directa de un solo producto, sin pasar por el carrito (no lo toca ni lo vacía)."""
+    if current_user.role == "admin":
+        raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede realizar compras")
+    if data.quantity < 1:
+        raise HTTPException(status_code=400, detail="Cantidad inválida")
+
+    product = db.query(models.Product).filter(models.Product.id == data.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Producto no encontrado")
+    if product.stock < data.quantity:
+        raise HTTPException(status_code=400, detail=f"Stock insuficiente para {product.name}")
+
+    new_order = _create_order(db, current_user.id, [(product, data.quantity)], payment_method)
     return _serialize_order_mine(db, new_order)
 
 @orders_router.get("/", response_model=List[schemas.OrderMineOut])

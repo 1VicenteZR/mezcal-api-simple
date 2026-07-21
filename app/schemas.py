@@ -191,6 +191,10 @@ class OrderAdminOut(BaseModel):
     items: list[OrderItemAdminOut] = []
     customer: Optional[OrderCustomerOut] = None
 
+class DirectCheckoutRequest(BaseModel):
+    product_id: int
+    quantity: int = 1
+
 class OrderStatusUpdate(BaseModel):
     status: OrderStatusEnum
 
