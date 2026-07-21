@@ -123,7 +123,7 @@ def _serialize_order_mine(db: Session, order: models.Order) -> dict:
     }
 
 @orders_router.post("/checkout", response_model=schemas.OrderMineOut)
-def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
+def checkout(payment_method: str = "efectivo", db: Session = Depends(get_db), current_user: models.User = Depends(permissions.get_current_user_simulado)):
     if current_user.role == "admin":
         raise HTTPException(status_code=403, detail="Acceso no permitido: el administrador no puede realizar compras")
 
@@ -145,7 +145,8 @@ def checkout(db: Session = Depends(get_db), current_user: models.User = Depends(
         total += subtotal
         order_items_data.append((product, cart_item.quantity, product.price))
 
-    new_order = models.Order(user_id=current_user.id, total=total, status="pendiente")
+    initial_status = "pagado" if payment_method == "tarjeta" else "pendiente"
+    new_order = models.Order(user_id=current_user.id, total=total, status=initial_status)
     db.add(new_order)
     db.commit()
     db.refresh(new_order)
@@ -244,12 +245,34 @@ def list_all_orders(db: Session = Depends(get_db), current_user: models.User = D
     orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
     return [_serialize_order_admin(db, order) for order in orders]
 
+ORDER_STEPS = ["pendiente", "pagado", "enviado", "entregado"]
+
 @orders_router.put("/{order_id}/status", response_model=schemas.OrderAdminOut)
 def update_order_status(order_id: int, update: schemas.OrderStatusUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(permissions.require_role_simulado("admin"))):
     order = db.query(models.Order).filter(models.Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Pedido no encontrado")
-    order.status = update.status
+
+    current = order.status
+    new = update.status
+
+    if new == current:
+        raise HTTPException(status_code=400, detail="El pedido ya está en ese estado")
+    if current in ("entregado", "cancelado"):
+        raise HTTPException(status_code=400, detail="Este pedido ya no se puede modificar")
+
+    if new != "cancelado":
+        current_idx = ORDER_STEPS.index(current)
+        expected_next = ORDER_STEPS[current_idx + 1] if current_idx + 1 < len(ORDER_STEPS) else None
+        if new != expected_next:
+            detail = (
+                f"No puedes saltar pasos: el siguiente estado debe ser '{expected_next}'"
+                if expected_next
+                else "Este pedido ya llegó al último paso"
+            )
+            raise HTTPException(status_code=400, detail=detail)
+
+    order.status = new
     db.commit()
     db.refresh(order)
     return _serialize_order_admin(db, order)
